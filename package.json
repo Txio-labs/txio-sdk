@@ -1,17 +1,19 @@
 {
   "name": "@txio/sdk",
-  "version": "0.1.0",
-  "description": "TypeScript client for Txio's public execution API — the same simulate/execute/history engine the Txio app uses, for external callers.",
+  "version": "0.2.0",
+  "description": "TypeScript client for Txio's public execution API \u2014 the same simulate/execute/history engine the Txio app uses, for external callers.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "openapi.json"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && node --test test/sdk.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

@@ -1,0 +1,592 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "txio public API",
+    "version": "0.1.0",
+    "description": "Pre-1.0: request and response shapes can change between releases. Authenticate with `Authorization: Bearer txio_live_...`. Every failure is a JSON-RPC 2.0 error object; see the ErrorEnvelope schema for the codes."
+  },
+  "servers": [
+    {
+      "url": "https://api.txio.xyz/api/public/v1"
+    }
+  ],
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
+  "paths": {
+    "/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiDocument",
+        "summary": "This document",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/history": {
+      "get": {
+        "operationId": "getHistory",
+        "summary": "Request history for the key's owner",
+        "description": "Requires scope `history:read`.",
+        "parameters": [
+          {
+            "name": "wallet_address",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "wallet_family",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sui",
+                "evm",
+                "solana",
+                "aptos",
+                "stellar"
+              ]
+            }
+          },
+          {
+            "name": "chain",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "History entries, newest first",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Requests per minute for this key and endpoint class"
+              },
+              "X-RateLimit-Remaining": {
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until the budget is full again"
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HistoryEntry"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or revoked API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key lacks the required scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions/simulate": {
+      "post": {
+        "operationId": "simulateTransaction",
+        "summary": "Dry-run a transaction (not available yet)",
+        "description": "Requires scope `transactions:simulate`. Server-side simulation is not implemented, so this always answers 501 with code -32015 instead of returning a result that looks like a check passed. Simulate with the txio app or CLI, then call execute.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "Missing, invalid or revoked API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key lacks the required scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Simulation is not available server-side",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions/execute": {
+      "post": {
+        "operationId": "executeTransaction",
+        "summary": "Sign with a session key and broadcast (EVM only)",
+        "description": "Requires scope `transactions:execute`. Subject to the owner's spend policy and the session key's limits. Send an `Idempotency-Key` so a retried request cannot broadcast twice.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "description": "Reusing a key with the same body returns the first result; with a different body it is a 409 (-32016)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The transaction was broadcast",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Requests per minute for this key and endpoint class"
+              },
+              "X-RateLimit-Remaining": {
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-RateLimit-Reset": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until the budget is full again"
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request, unsupported chain, or a spend limit was hit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or revoked API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key lacks the required scope, or the session key does not allow this",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "txioEvent": {
+      "post": {
+        "operationId": "receiveWebhook",
+        "summary": "An event delivered to your endpoint",
+        "description": "Headers: `X-Txio-Event`, `X-Txio-Delivery` (unique per event, stable across retries), `X-Txio-Timestamp` (unix seconds) and `X-Txio-Signature`. Verify like this: compute HMAC-SHA256 with your signing secret over the string `<X-Txio-Timestamp>.<raw request body>`, hex-encode it, and compare with the part after `v1=` in `X-Txio-Signature` using a constant-time comparison. Reject requests whose timestamp is more than 5 minutes old. Deliveries are retried up to 6 times with backoff (10s, 1m, 5m, 30m, 2h, 6h); delivery is at least once, so deduplicate on the delivery id.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Acknowledge with any 2xx within 10 seconds. Anything else is retried; 410 disables the subscription."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "A txio API key. Scopes: history:read, routes:read, transactions:simulate, transactions:execute. A key without a route's scope gets 403 (-32011)."
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "jsonrpc",
+          "error",
+          "id"
+        ],
+        "properties": {
+          "jsonrpc": {
+            "const": "2.0"
+          },
+          "id": {
+            "type": "null"
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "data"
+            ],
+            "properties": {
+              "code": {
+                "type": "integer",
+                "description": "-32000 upstream unreachable; -32001 name resolution failed; -32002 internal; -32010 unauthorized; -32011 forbidden (missing scope); -32012 rate limited; -32013 invalid request; -32014 not found; -32015 not implemented; -32016 conflict.",
+                "enum": [
+                  -32000,
+                  -32001,
+                  -32002,
+                  -32010,
+                  -32011,
+                  -32012,
+                  -32013,
+                  -32014,
+                  -32015,
+                  -32016
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "requestId"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "integer"
+                  },
+                  "requestId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "HistoryEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "request_type",
+          "network",
+          "status",
+          "duration_ms",
+          "executed_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "request_type": {
+            "type": "string",
+            "enum": [
+              "RPC",
+              "TRANSACTION"
+            ]
+          },
+          "chain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "network": {
+            "type": "string"
+          },
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wallet_family": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "wallet_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tx_params": {},
+          "result": {},
+          "status": {
+            "type": "integer"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "executed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TransactionRequest": {
+        "type": "object",
+        "required": [
+          "chain",
+          "tx_params"
+        ],
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "sui",
+              "evm",
+              "solana",
+              "aptos",
+              "stellar"
+            ]
+          },
+          "tx_params": {
+            "description": "Chain-native transaction parameters, the same shape the txio app builds for that chain."
+          }
+        }
+      },
+      "ExecuteRequest": {
+        "type": "object",
+        "required": [
+          "session_key_id",
+          "chain",
+          "tx_params"
+        ],
+        "properties": {
+          "session_key_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "evm"
+            ],
+            "description": "Only evm is supported today."
+          },
+          "tx_params": {
+            "type": "object",
+            "required": [
+              "chain_id",
+              "to"
+            ],
+            "properties": {
+              "chain_id": {
+                "type": "integer"
+              },
+              "to": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "data": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ExecuteResult": {
+        "type": "object",
+        "required": [
+          "hash"
+        ],
+        "properties": {
+          "hash": {
+            "type": "string"
+          }
+        }
+      },
+      "WebhookEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "event",
+          "created_at",
+          "data"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Same as the X-Txio-Delivery header; stable across retries. Deduplicate on it."
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "tx.confirmed",
+              "tx.failed",
+              "swap.resumable",
+              "session_key.expiring",
+              "spend_limit.reached"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  },
+  "x-txio-scopes": [
+    "history:read",
+    "routes:read",
+    "transactions:simulate",
+    "transactions:execute"
+  ]
+}
